@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    container_name: lazyaws
+    volumes:
+      - ./src:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - ${USERPROFILE}/.aws:/root/.aws
+    working_dir: /workspace/${PROJECT_NAME:-app}
+    stdin_open: true
+    tty: true
+    command: sh
+
+volumes:
+  go-mod-cache:
