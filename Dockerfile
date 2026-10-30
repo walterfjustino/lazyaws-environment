@@ -20,6 +20,13 @@ RUN wget https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -O /tmp/awscli
  && unzip /tmp/awscliv2.zip \
  && ./aws/install \
  && rm -rf /tmp/awscliv2.zip aws
+ 
+# -------------------------
+# Session Manager Plugin
+# -------------------------
+RUN curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o "session-manager-plugin.deb" \
+ && dpkg -i session-manager-plugin.deb \
+ && rm session-manager-plugin.deb
 
 # -------------------------
 # kubectl
