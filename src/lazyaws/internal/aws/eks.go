@@ -339,7 +339,7 @@ func (c *Client) GetAddonDetails(ctx context.Context, clusterName, addonName str
 }
 
 // UpdateKubeconfig updates the local kubeconfig file with the cluster configuration
-func (c *Client) UpdateKubeconfig(ctx context.Context, clusterName string, clusterRegion string, ssoCredentials *SSOCredentials) error {
+func (c *Client) UpdateKubeconfig(ctx context.Context, clusterName string, clusterRegion string, ssoCredentials *SSOCredentials, profileName string) error {
 	// Get the kubeconfig path
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -359,18 +359,24 @@ func (c *Client) UpdateKubeconfig(ctx context.Context, clusterName string, clust
 		region = c.Region
 	}
 
-	// Use aws eks update-kubeconfig command
-	cmd := exec.CommandContext(ctx, "aws", "eks", "update-kubeconfig",
+	// Build the base args
+	args := []string{"eks", "update-kubeconfig",
 		"--name", clusterName,
 		"--region", region,
-		"--kubeconfig", kubeconfigPath)
-	
-	// Start with inherited environment variables
+		"--kubeconfig", kubeconfigPath,
+	}
+
+	// When using a named profile, pass --profile so the generated kubeconfig
+	// exec stanza also carries the profile (fixes k9s token refresh)
+	if ssoCredentials == nil && profileName != "" {
+		args = append(args, "--profile", profileName)
+	}
+
+	cmd := exec.CommandContext(ctx, "aws", args...)
 	cmd.Env = os.Environ()
-	
-	// If SSO credentials are provided, use them explicitly
+
+	// If SSO credentials are provided, inject them as env vars and strip any existing profile/creds
 	if ssoCredentials != nil {
-		// Remove any existing AWS credential env vars to avoid conflicts
 		var cleanEnv []string
 		for _, env := range cmd.Env {
 			if !strings.HasPrefix(env, "AWS_ACCESS_KEY_ID=") &&
@@ -381,27 +387,11 @@ func (c *Client) UpdateKubeconfig(ctx context.Context, clusterName string, clust
 			}
 		}
 		cmd.Env = cleanEnv
-		
-		// Add SSO credentials
 		cmd.Env = append(cmd.Env,
 			fmt.Sprintf("AWS_ACCESS_KEY_ID=%s", ssoCredentials.AccessKeyID),
 			fmt.Sprintf("AWS_SECRET_ACCESS_KEY=%s", ssoCredentials.SecretAccessKey),
 			fmt.Sprintf("AWS_SESSION_TOKEN=%s", ssoCredentials.SessionToken),
 		)
-	} else {
-		// No SSO credentials - check if AWS_PROFILE is set, if not use account ID as profile name
-		hasProfile := false
-		for _, env := range cmd.Env {
-			if strings.HasPrefix(env, "AWS_PROFILE=") {
-				hasProfile = true
-				break
-			}
-		}
-		
-		// If no profile is set, return error - profile must be provided during login
-		if !hasProfile {
-			return fmt.Errorf("Não foi possível efetuar o login, profile incorreto ou não encontrado")
-		}
 	}
 
 	output, err := cmd.CombinedOutput()

@@ -533,7 +533,11 @@ func (m model) loadEKSClusterDetails(clusterName string) tea.Cmd {
 func (m model) updateKubeconfig(clusterName string, clusterRegion string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		err := m.awsClient.UpdateKubeconfig(ctx, clusterName, clusterRegion, m.ssoCredentials)
+		profileName := ""
+		if m.authConfig != nil && m.authConfig.Method == aws.AuthMethodProfile {
+			profileName = m.authConfig.ProfileName
+		}
+		err := m.awsClient.UpdateKubeconfig(ctx, clusterName, clusterRegion, m.ssoCredentials, profileName)
 		return kubeconfigUpdatedMsg{clusterName: clusterName, err: err}
 	}
 }
@@ -4419,7 +4423,13 @@ func main() {
 						break
 					}
 				}
-				
+
+				// Se não tem AWS_PROFILE no ambiente, usa o profile configurado na UI
+				if !hasProfile && finalM.authConfig != nil && finalM.authConfig.Method == aws.AuthMethodProfile && finalM.authConfig.ProfileName != "" {
+					k9sCmd.Env = append(k9sCmd.Env, fmt.Sprintf("AWS_PROFILE=%s", finalM.authConfig.ProfileName))
+					hasProfile = true
+				}
+
 				if !hasProfile {
 					fmt.Printf("Não foi possível efetuar o login, profile incorreto ou não encontrado\n")
 					fmt.Println("Press Enter to return to lazyaws...")
